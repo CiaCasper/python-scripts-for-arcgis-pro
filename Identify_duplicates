@@ -1,0 +1,42 @@
+import arcpy
+
+# Get the reference to the layer in the current map
+layer_name = "Formal_data"
+aprx = arcpy.mp.ArcGISProject("CURRENT")
+map_obj = aprx.activeMap
+layer = map_obj.listLayers(layer_name)[0]
+
+# Field name to check for duplicates
+field_name = "Address"
+oid_field_name = "FID"
+
+# Create a dictionary to store addresses and their counts
+address_dict = {}
+
+# Use a search cursor to iterate through the address field
+with arcpy.da.SearchCursor(layer, [field_name]) as cursor:
+    for row in cursor:
+        address = row[0]
+        if address in address_dict:
+            address_dict[address] += 1
+        else:
+            address_dict[address] = 1
+
+# List to store FIDs of duplicate addresses
+duplicate_fids = []
+
+# Use a search cursor to get the FIDs of duplicate addresses
+with arcpy.da.SearchCursor(layer, [oid_field_name, field_name]) as cursor:
+    for row in cursor:
+        address = row[1]
+        if address_dict[address] > 1:
+            duplicate_fids.append(row[0])
+
+# Select features with duplicate addresses
+if duplicate_fids:
+    fid_list_str = ', '.join(map(str, duplicate_fids))
+    where_clause = f"{oid_field_name} IN ({fid_list_str})"
+    arcpy.management.SelectLayerByAttribute(layer, "NEW_SELECTION", where_clause)
+    print(f"Selected {len(duplicate_fids)} duplicate addresses.")
+else:
+    print("No duplicate addresses found.")
