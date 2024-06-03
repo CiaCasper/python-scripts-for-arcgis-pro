@@ -1,0 +1,43 @@
+import arcpy
+
+# Get the reference to the layer in the current map
+layer_name = "Formal_data"
+aprx = arcpy.mp.ArcGISProject("CURRENT")
+map_obj = aprx.activeMap
+layer = map_obj.listLayers(layer_name)[0]
+
+# Field name to check for duplicates
+oid_field_name = "FID"
+
+# Create a dictionary to store coordinates and their FIDs
+coord_dict = {}
+
+# Use a search cursor to iterate through the coordinates field
+with arcpy.da.SearchCursor(layer, [oid_field_name, "SHAPE@XY"]) as cursor:
+    for row in cursor:
+        fid = row[0]
+        coords = row[1]
+        if coords in coord_dict:
+            coord_dict[coords].append(fid)
+        else:
+            coord_dict[coords] = [fid]
+
+# List to store FIDs of duplicates to be deleted
+fids_to_delete = []
+
+# Identify duplicates based on coordinates
+for coords in coord_dict:
+    fids = coord_dict[coords]
+    if len(fids) > 1:
+        # Keep one and mark the rest for deletion
+        fids_to_delete.extend(fids[1:])
+
+# Delete duplicates
+if fids_to_delete:
+    with arcpy.da.UpdateCursor(layer, [oid_field_name]) as cursor:
+        for row in cursor:
+            if row[0] in fids_to_delete:
+                cursor.deleteRow()
+    print(f"Deleted {len(fids_to_delete)} duplicate features based on coordinates.")
+else:
+    print("No duplicate features found based on coordinates.")
